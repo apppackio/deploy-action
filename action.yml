@@ -1,0 +1,17 @@
+name: AppPack Deploy
+description: Trigger an AppPack deploy
+branding:
+  icon: box
+  color: purple
+inputs:
+  appname:
+    description: Name of the AppPack app
+    required: true
+outputs:
+  build_number:
+    description: CodeBuild build number of deploy
+  build_arn:
+    description: CodeBuild build ARN of deploy
+runs:
+  using: node12
+  main: index.js
