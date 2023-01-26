@@ -13,5 +13,5 @@ outputs:
   build_arn:
     description: CodeBuild build ARN of deploy
 runs:
-  using: node12
+  using: node16
   main: index.js
