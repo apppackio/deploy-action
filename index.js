@@ -18,7 +18,6 @@ const codebuildImage = "public.ecr.aws/aws-cli/aws-cli:latest";
 
 async function commitTxt() {
   // exec `git log -n1` and save to `commit.txt`
-  startGroup("Writing commit.txt");
   await exec("git", ["log", "-n1"], {
     listeners: {
       stdout: (data) => {
@@ -72,15 +71,13 @@ async function uploadArtifacts(artifactsBucket, files) {
 }
 
 async function downloadCrane() {
-  startGroup("Downloading crane");
+  info("Downloading crane");
   const craneArchive = await downloadTool(craneDownloadPath);
   await extractTar(craneArchive, "/tmp/crane");
-  endGroup();
 }
 
 async function startBuild(artifactsBucket, buildArtifacts) {
   // trigger deploy via codebuild
-  startGroup("Triggering deploy");
   const buildspec = {
     version: 0.2,
     artifacts: {
@@ -108,7 +105,6 @@ async function startBuild(artifactsBucket, buildArtifacts) {
   info(data.build.arn);
   setOutput("build_number", buildNumber);
   setOutput("build_arn", data.build.arn);
-  endGroup();
   return buildNumber;
 }
 
