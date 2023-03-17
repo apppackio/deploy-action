@@ -1,19 +1,27 @@
 const core = require("@actions/core");
 const github = require("@actions/github");
 const { exec } = require("@actions/exec");
-const fs = require('fs');
-const { downloadTool, extractTar } = require("@actions/tool-cache");
+const fs = require("fs");
+const tc = require("@actions/tool-cache");
 const { load } = require("js-yaml");
-const { CodeBuildClient, BatchGetProjectsCommand, StartBuildCommand } = require("@aws-sdk/client-codebuild");
-const { ECRClient, GetAuthorizationTokenCommand } = require("@aws-sdk/client-ecr");
+const { join } = require("path");
+const {
+  CodeBuildClient,
+  BatchGetProjectsCommand,
+  StartBuildCommand,
+} = require("@aws-sdk/client-codebuild");
+const {
+  ECRClient,
+  GetAuthorizationTokenCommand,
+} = require("@aws-sdk/client-ecr");
 const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 
-const { startGroup, getInput, info, setOutput, warning, setFailed, endGroup } = core;
+const { startGroup, getInput, info, setOutput, warning, setFailed, endGroup } =
+  core;
 const { context } = github;
 
-
-const craneDownloadPath =
-  "https://github.com/google/go-containerregistry/releases/download/v0.13.0/go-containerregistry_Linux_x86_64.tar.gz";
+const craneVersion = "0.13.0";
+const craneDownloadPath = `https://github.com/google/go-containerregistry/releases/download/v${craneVersion}/go-containerregistry_Linux_x86_64.tar.gz`;
 const codebuildImage = "public.ecr.aws/aws-cli/aws-cli:latest";
 
 async function commitTxt() {
@@ -72,8 +80,19 @@ async function uploadArtifacts(artifactsBucket, files) {
 
 async function downloadCrane() {
   info("Downloading crane");
-  const craneArchive = await downloadTool(craneDownloadPath);
-  await extractTar(craneArchive, "/tmp/crane");
+  const craneArchive = await tc.downloadTool(craneDownloadPath);
+  const tmpDir = process.env.RUNNER_TEMP || os.tmpdir();
+  const pathToCLI = await tc.extractTar(craneArchive, tmpDir);
+
+  // Cache the downloaded tool
+  cachedPath = await tc.cacheFile(
+    join(pathToCLI, "crane"),
+    "crane",
+    "crane",
+    craneVersion
+  );
+  // Add to the PATH
+  core.addPath(cachedPath);
 }
 
 async function startBuild(artifactsBucket, buildArtifacts) {
@@ -108,15 +127,8 @@ async function startBuild(artifactsBucket, buildArtifacts) {
   return buildNumber;
 }
 
-async function pushImages(dockerRepo, buildNumber) {
-  // tag docker image
-  startGroup(`Pushing images to ${dockerRepo}`);
-  const image = `${dockerRepo}:${context.sha}`;
-  await exec("docker", [
-    "tag",
-    getInput("image", { required: true }),
-    image,
-  ]);
+async function ecrLogin(dockerRepo) {
+  // login to ECR
   const dockerRegistry = dockerRepo.split("/")[0];
   const ecr = new ECRClient({});
   const command = new GetAuthorizationTokenCommand({});
@@ -129,23 +141,28 @@ async function pushImages(dockerRepo, buildNumber) {
     .toString()
     .split(":");
   await exec(
-    '"/tmp/crane/crane"',
-    [
-      "auth",
-      "login",
-      "--username",
-      username,
-      "--password-stdin",
-      dockerRegistry,
-    ],
+    "docker",
+    ["login", "--username", username, "--password-stdin", dockerRegistry],
     {
       input: Buffer.from(password),
     }
   );
+}
+
+async function pushImage(dockerRepo) {
+  // tag docker image
+  startGroup(`Pushing image to ${dockerRepo}`);
+  const image = `${dockerRepo}:${context.sha}`;
+  await exec("docker", ["tag", getInput("image", { required: true }), image]);
   await exec("docker", ["push", image]);
-  info("Tagging image");
-  await exec('"/tmp/crane/crane"', ["tag", image, `build-${buildNumber}`]);
   endGroup();
+  return image;
+}
+
+async function tagImage(imageName, tag) {
+  // tag docker image
+  info(`Tagging ${imageName} as ${tag}`);
+  await exec("crane", ["tag", imageName, tag]);
 }
 
 async function main() {
@@ -166,8 +183,10 @@ async function main() {
   const artifactsBucket = project.artifacts.location;
   const buildArtifacts = load(project.source.buildspec).artifacts.files;
   await uploadArtifacts(artifactsBucket, buildArtifacts);
+  await ecrLogin(dockerRepo);
+  const imageName = await pushImage(dockerRepo);
   const buildNumber = await startBuild(artifactsBucket, buildArtifacts);
-  await pushImages(dockerRepo, buildNumber);
+  await tagImage(imageName, `build-${buildNumber}`);
 }
 
 if (require.main === module) {
