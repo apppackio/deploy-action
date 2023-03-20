@@ -13,6 +13,7 @@ const {
   GetAuthorizationTokenCommand,
 } = require("@aws-sdk/client-ecr");
 
+const codebuildImage = "public.ecr.aws/aws-cli/aws-cli:latest";
 const craneDownloadPath =
   "https://github.com/google/go-containerregistry/releases/download/v0.4.1/go-containerregistry_Linux_x86_64.tar.gz";
 
@@ -58,6 +59,7 @@ async function main() {
     sourceVersion: github.context.ref,
     gitCloneDepthOverride: 1,
     buildspecOverride: JSON.stringify(buildspec),
+    imageOverride: codebuildImage,
   };
   command = new StartBuildCommand(params);
   data = await codebuild.send(command);
