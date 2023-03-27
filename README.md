@@ -1,14 +1,26 @@
 # AppPack Build GitHub Action
 
-This action triggers an [AppPack](https://apppack.io) app's CodeBuild Project build which then kicks off a full release and deployment at AWS. AWS credentials are required to make the necessary API calls.
+This action triggers an [AppPack](https://apppack.io) app's CodeBuild Project build which then kicks off a full release and deployment at AWS. AWS credentials are required to make the necessary API calls. It does the following:
 
-The action is designed to be used with `apppackio/build-action` and `apppackio/upload-artifacts-action`. The former will upload a container image in the correct format and the latter will upload build artifacts to a known location at S3.
+* Uploads a container image to the correct location. The image must exist locally in the GitHub Actions Docker daemon.
+* Generates a `commit.txt` file for the current commit. You should include the `actions/checkout` step in your workflow to ensure the commit is available.
+* Uploads the following files as build artifacts to S3:
+  * `build.log` (optional)
+  * `test.log` (optional)
+  * `commit.txt` (required)
+  * `apppack.toml` (required)
+
+Your build process is responsible for generating these files (with the exception of `commit.txt`).
 
 ## Inputs
 
 ### `appname`
 
 **Required** Name of the AppPack app
+
+### `image`
+
+**Required** Name of local Docker image to deploy
 
 ## Outputs
 
@@ -23,12 +35,13 @@ CodeBuild build ARN of deploy
 ## Example usage
 
 ```yaml
+- uses: aws-actions/configure-aws-credentials@v2
+  with:
+    role-to-assume: ${{ env.AWS_ROLE_ARN }}
+    aws-region: ${{ env.AWS_REGION }}
 - name: AppPack Deploy
   uses: apppackio/deploy-action@v1
   with:
     appname: my-app
-  env:
-    AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-    AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-    AWS_REGION: us-east-1
+    image: my-app:latest
 ```
