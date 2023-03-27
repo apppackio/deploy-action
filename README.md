@@ -9,6 +9,7 @@ This action triggers an [AppPack](https://apppack.io) app's CodeBuild Project bu
   * `test.log` (optional)
   * `commit.txt` (required)
   * `apppack.toml` (required)
+* Triggers the CodeBuild Project to start the AppPack deploy pipeline.
 
 Your build process is responsible for generating these files (with the exception of `commit.txt`).
 
