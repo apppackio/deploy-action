@@ -1,4 +1,4 @@
-# AppPack Build GitHub Action
+# AppPack Deploy GitHub Action
 
 This action triggers an [AppPack](https://apppack.io) app's CodeBuild Project build which then kicks off a full release and deployment at AWS. AWS credentials are required to make the necessary API calls. It does the following:
 
